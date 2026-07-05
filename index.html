@@ -26,6 +26,20 @@
     --gold: #D9A441;
   }
 
+  html[data-theme="light"] {
+    --bg: #F4F1EA;
+    --surface: #FFFFFF;
+    --surface-alt: #ECE7DC;
+    --line: #DBD5C6;
+    --text: #201E1A;
+    --text-dim: #6E6A60;
+    --accent: #C1442D;
+    --accent-soft: #A83A26;
+    --success: #4C7B63;
+    --success-soft: #3A5E4C;
+    --gold: #A8790F;
+  }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   html, body {
@@ -35,9 +49,28 @@
     color: var(--text);
     font-family: 'Inter', sans-serif;
     min-height: 100%;
+    transition: background .25s ease, color .25s ease;
     /* respect iPhone notch/home-indicator when added to home screen */
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  #theme-toggle {
+    position: fixed;
+    top: calc(14px + env(safe-area-inset-top));
+    right: 14px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
   }
 
   #app {
@@ -297,11 +330,35 @@
 </style>
 </head>
 <body>
+<button id="theme-toggle" aria-label="Toggle light and dark theme">🌙</button>
 <div id="app"></div>
 
 <script>
 (function () {
   "use strict";
+
+  // ---------- theme ----------
+  function initTheme() {
+    var saved = localStorage.getItem("workout-theme");
+    var theme = saved || (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    applyTheme(theme);
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    var btn = document.getElementById("theme-toggle");
+    if (btn) btn.textContent = theme === "light" ? "\u2600\uFE0F" : "\uD83C\uDF19";
+  }
+
+  function toggleTheme() {
+    var current = document.documentElement.getAttribute("data-theme") || "dark";
+    var next = current === "dark" ? "light" : "dark";
+    localStorage.setItem("workout-theme", next);
+    applyTheme(next);
+  }
+
+  initTheme();
+  document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 
   // ---------- data ----------
   function uid() { return Math.random().toString(36).slice(2, 9); }
@@ -411,6 +468,7 @@
   var streak = loadJSON("workout-streak", 0);
   var activeDay = loadJSON("workout-active-day", "day1");
   var editing = false;
+  var view = "tracker"; // "tracker" | "history"
   var toastText = "";
   var toastTimer = null;
 
@@ -447,8 +505,53 @@
     toastTimer = setTimeout(function () { toastText = ""; render(); }, 2600);
   }
 
+  function getHistoryEntries() {
+    var entries = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (!key || key.indexOf("workout-log:") !== 0) continue;
+      var dateStr = key.slice("workout-log:".length);
+      var dayLogByDay = loadJSON(key, null);
+      if (!dayLogByDay) continue;
+      plan.forEach(function (day) {
+        var dl = dayLogByDay[day.id];
+        if (!dl) return;
+        var setsDone = 0, setsTotal = 0;
+        day.exercises.forEach(function (ex) {
+          setsTotal += ex.sets;
+          var entry = dl[ex.id];
+          setsDone += Math.min((entry && entry.completed) || 0, ex.sets);
+        });
+        if (day.cardio) {
+          setsTotal += 1;
+          if (dl._cardioDone) setsDone += 1;
+        }
+        if (setsDone > 0 || dl._finished) {
+          entries.push({
+            date: dateStr,
+            dayName: day.name.split(" (")[0],
+            done: setsDone,
+            total: setsTotal,
+            finished: !!dl._finished
+          });
+        }
+      });
+    }
+    entries.sort(function (a, b) { return b.date.localeCompare(a.date); });
+    return entries;
+  }
+
+  function formatDate(dateStr) {
+    var parts = dateStr.split("-").map(Number);
+    var d = new Date(parts[0], parts[1] - 1, parts[2]);
+    var opts = { weekday: "short", month: "short", day: "numeric" };
+    return d.toLocaleDateString(undefined, opts);
+  }
+
   // ---------- actions ----------
   function setActiveDay(id) { activeDay = id; persistActiveDay(); render(); }
+  function openHistory() { view = "history"; render(); }
+  function closeHistory() { view = "tracker"; render(); }
 
   function bumpSetTo(dayId, exId, targetSets, nextCompleted) {
     if (!log[dayId]) log[dayId] = { _cardioDone: false, _finished: false };
@@ -558,7 +661,39 @@
     );
   }
 
+  function renderHistory() {
+    var app = document.getElementById("app");
+    var entries = getHistoryEntries();
+
+    var listHtml = entries.length
+      ? entries.map(function (e) {
+          var pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
+          return (
+            '<div class="card' + (pct === 100 ? " complete" : "") + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+              '<div>' +
+                '<div class="ex-name">' + esc(e.dayName) + '</div>' +
+                '<div style="font-size:12px;color:var(--text-dim);margin-top:2px">' + esc(formatDate(e.date)) + '</div>' +
+              '</div>' +
+              '<div style="text-align:right">' +
+                '<div style="font-family:\'JetBrains Mono\', monospace;font-size:13px;color:' + (pct === 100 ? "var(--success)" : "var(--text-dim)") + '">' + e.done + '/' + e.total + '</div>' +
+                '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">' + pct + '%' + (e.finished ? " \u2713" : "") + '</div>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join("")
+      : '<div class="card" style="text-align:center;color:var(--text-dim)">No workouts logged yet. Once you log a set, it\u2019ll show up here.</div>';
+
+    app.innerHTML =
+      '<div class="eyebrow">Streak ' + streak + '</div>' +
+      '<h1>History</h1>' +
+      '<div class="exercise-list" style="margin-top:18px">' + listHtml + '</div>' +
+      '<button class="btn-ghost" style="margin-top:20px;width:100%;padding:12px;" data-action="close-history">Back to today\u2019s workout</button>';
+
+    app.querySelector('[data-action="close-history"]').addEventListener("click", closeHistory);
+  }
+
   function render() {
+    if (view === "history") { renderHistory(); return; }
     var app = document.getElementById("app");
     var dayPlan = findDay(activeDay);
     var dayLog = log[activeDay] || {};
@@ -630,6 +765,7 @@
       '<div class="tabs">' + tabsHtml + '</div>' +
       '<div class="toolbar">' +
         '<input class="day-name-input" value="' + esc(dayPlan.name) + '"' + (editing ? "" : " disabled") + ' data-action="rename-day">' +
+        '<button class="btn-ghost" data-action="open-history">History</button>' +
         '<button class="btn-ghost" data-action="toggle-edit">' + (editing ? "Done editing" : "Edit plan") + '</button>' +
       '</div>' +
       '<div class="exercise-list">' + exercisesHtml + cardioHtml +
@@ -653,6 +789,9 @@
 
     var editEl = app.querySelector('[data-action="toggle-edit"]');
     if (editEl) editEl.addEventListener("click", toggleEditing);
+
+    var historyEl = app.querySelector('[data-action="open-history"]');
+    if (historyEl) historyEl.addEventListener("click", openHistory);
 
     var addEl = app.querySelector('[data-action="add-ex"]');
     if (addEl) addEl.addEventListener("click", function () { addExercise(activeDay); });
