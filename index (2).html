@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>5-Day Split Tracker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Split Tracker" />
+<link rel="apple-touch-icon" href="icon.png" />
+<link rel="icon" href="icon.png" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+  :root {
+    --bg: #17191B;
+    --surface: #1F2224;
+    --surface-alt: #282C2E;
+    --line: #34393C;
+    --text: #ECE8E1;
+    --text-dim: #9A9D9F;
+    --accent: #C1442D;
+    --accent-soft: #8F3323;
+    --success: #5B9279;
+    --success-soft: #3E6858;
+    --gold: #D9A441;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100%;
+    /* respect iPhone notch/home-indicator when added to home screen */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  #app {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 18px 40px;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 0.5px;
+    margin: 0;
+    text-transform: uppercase;
+    line-height: 1.15;
+  }
+
+  .plate-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .plate-cap { width: 10px; height: 10px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+  .plate-sleeve { height: 6px; width: 34px; background: var(--line); border-radius: 2px; flex-shrink: 0; }
+  .plates { display: flex; align-items: flex-end; gap: 3px; }
+  .plate {
+    width: 9px; border-radius: 2px;
+    background: var(--surface-alt);
+    border: 1px solid var(--line);
+    transition: background .35s ease, transform .35s ease;
+  }
+  .plate.active {
+    background: var(--accent);
+    border-color: var(--accent-soft);
+  }
+
+  .progress-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin: 20px 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .tab {
+    flex: 0 0 auto;
+    background: var(--surface);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .tab .sub { display: block; font-size: 10px; opacity: .8; font-weight: 400; margin-top: 1px; }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent-soft); }
+  .tab-bar {
+    position: absolute; left: 0; bottom: 0; height: 3px; background: var(--success);
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .day-name-input {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+  .day-name-input:not(:disabled) { outline: 1px dashed var(--line); padding: 2px 4px; }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .exercise-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .card.complete { border-color: var(--success-soft); }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .ex-name { font-weight: 600; font-size: 15px; }
+  .ex-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 10px;
+    margin-top: 3px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .weight-input {
+    width: 62px;
+    background: var(--surface-alt);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .set-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .set-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .set-btn.filled { background: var(--success); border-color: var(--success-soft); color: #0f1210; }
+
+  .edit-name-input {
+    background: var(--surface-alt);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 4px 6px;
+    width: 100%;
+    margin-bottom: 6px;
+  }
+  .edit-field { width: 40px; background: var(--surface-alt); border: 1px solid var(--line); color: var(--text); border-radius: 4px; padding: 2px 4px; font-family: 'JetBrains Mono', monospace; }
+  .edit-field.reps { width: 66px; }
+  .remove-link { background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 11px; padding: 0; }
+
+  .add-exercise-btn {
+    background: transparent;
+    border: 1px dashed var(--line);
+    color: var(--text-dim);
+    border-radius: 10px;
+    padding: 12px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    font-size: 13px;
+    width: 100%;
+  }
+
+  .cardio-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cardio-card.done { border-color: var(--success-soft); }
+  .cardio-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .cardio-check {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .cardio-check.done { background: var(--success); border-color: var(--success-soft); color: #0f1210; }
+
+  .finish-btn {
+    margin-top: 22px;
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .finish-btn:disabled { opacity: .4; cursor: default; }
+  .finish-btn.complete { background: var(--success); }
+
+  .toast {
+    margin-top: 12px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--gold);
+    min-height: 16px;
+  }
+
+  .reset-link {
+    display: block;
+    text-align: center;
+    margin-top: 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    opacity: 0.6;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- data ----------
+  function uid() { return Math.random().toString(36).slice(2, 9); }
+
+  var DEFAULT_PLAN = [
+    { id: "day1", label: "Mon", name: "Push (Chest, Shoulders, Triceps)",
+      cardio: { name: "Incline Walk", duration: "20\u201325 min" },
+      exercises: [
+        { id: uid(), name: "Bench Press", sets: 4, reps: "6-10" },
+        { id: uid(), name: "Incline Dumbbell Press", sets: 3, reps: "8-12" },
+        { id: uid(), name: "Shoulder Press", sets: 3, reps: "8-12" },
+        { id: uid(), name: "Lateral Raises", sets: 3, reps: "12-15" },
+        { id: uid(), name: "Triceps Pushdown", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Overhead Triceps Extension", sets: 3, reps: "10-15" }
+      ]
+    },
+    { id: "day2", label: "Tue", name: "Pull (Back, Biceps)",
+      cardio: { name: "Incline Walk / Bike", duration: "20\u201325 min" },
+      exercises: [
+        { id: uid(), name: "Lat Pulldown", sets: 4, reps: "8-12" },
+        { id: uid(), name: "Seated Cable Row", sets: 3, reps: "8-12" },
+        { id: uid(), name: "Chest-Supported Row", sets: 3, reps: "8-12" },
+        { id: uid(), name: "Face Pulls", sets: 3, reps: "12-15" },
+        { id: uid(), name: "Dumbbell Biceps Curl", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Hammer Curls", sets: 3, reps: "10-15" }
+      ]
+    },
+    { id: "day3", label: "Wed", name: "Legs (Quads, Hamstrings, Glutes, Calves, Core)",
+      cardio: { name: "Incline Walk", duration: "15\u201320 min" },
+      exercises: [
+        { id: uid(), name: "Squat or Leg Press", sets: 4, reps: "8-12" },
+        { id: uid(), name: "Romanian Deadlift", sets: 3, reps: "8-12" },
+        { id: uid(), name: "Walking Lunges", sets: 3, reps: "10 each leg" },
+        { id: uid(), name: "Leg Curl", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Leg Extension", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Calf Raises", sets: 4, reps: "12-20" },
+        { id: uid(), name: "Plank", sets: 3, reps: "30-60 sec" },
+        { id: uid(), name: "Hanging Knee Raise", sets: 3, reps: "12-15" }
+      ]
+    },
+    { id: "day4", label: "Thu", name: "Upper (Strength Focus)",
+      cardio: { name: "Incline Walk", duration: "20\u201325 min" },
+      exercises: [
+        { id: uid(), name: "Incline Bench Press", sets: 4, reps: "6-10" },
+        { id: uid(), name: "Chest-Supported Row", sets: 4, reps: "6-10" },
+        { id: uid(), name: "Overhead Press", sets: 3, reps: "6-10" },
+        { id: uid(), name: "Lat Pulldown or Pull-Ups", sets: 3, reps: "8-12" },
+        { id: uid(), name: "Cable Fly", sets: 3, reps: "12-15" },
+        { id: uid(), name: "Face Pulls", sets: 3, reps: "12-15" },
+        { id: uid(), name: "Biceps Curl", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Triceps Dips or Pushdown", sets: 3, reps: "10-15" }
+      ]
+    },
+    { id: "day5", label: "Fri", name: "Lower (Strength + Hypertrophy)",
+      cardio: { name: "Incline Walk", duration: "15\u201320 min" },
+      exercises: [
+        { id: uid(), name: "Deadlift or Romanian Deadlift", sets: 3, reps: "6-10" },
+        { id: uid(), name: "Bulgarian Split Squat", sets: 3, reps: "8-12 each leg" },
+        { id: uid(), name: "Leg Press", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Leg Curl", sets: 3, reps: "10-15" },
+        { id: uid(), name: "Leg Extension", sets: 2, reps: "12-15" },
+        { id: uid(), name: "Calf Raises", sets: 4, reps: "12-20" },
+        { id: uid(), name: "Cable Crunches", sets: 3, reps: "12-15" },
+        { id: uid(), name: "Side Plank", sets: 3, reps: "30-45 sec each side" }
+      ]
+    },
+    { id: "day6", label: "Sat", name: "Active Recovery", cardio: null,
+      exercises: [ { id: uid(), name: "Walk + Mobility / Stretching", sets: 1, reps: "30-60 min" } ]
+    },
+    { id: "day7", label: "Sun", name: "Rest Day", cardio: null,
+      exercises: [ { id: uid(), name: "Recovery, Sleep & Nutrition Focus", sets: 1, reps: "no training" } ]
+    }
+  ];
+
+  // ---------- storage helpers ----------
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function loadJSON(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (e) { return fallback; }
+  }
+
+  function saveJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ }
+  }
+
+  function emptyLogForPlan(plan) {
+    var log = {};
+    plan.forEach(function (day) {
+      log[day.id] = { _cardioDone: false, _finished: false };
+      day.exercises.forEach(function (ex) {
+        log[day.id][ex.id] = { completed: 0, weight: "" };
+      });
+    });
+    return log;
+  }
+
+  // ---------- state ----------
+  var date = todayKey();
+  var plan = loadJSON("workout-plan", DEFAULT_PLAN);
+  var log = loadJSON("workout-log:" + date, emptyLogForPlan(plan));
+  var streak = loadJSON("workout-streak", 0);
+  var activeDay = loadJSON("workout-active-day", "day1");
+  var editing = false;
+  var toastText = "";
+  var toastTimer = null;
+
+  function persistPlan() { saveJSON("workout-plan", plan); }
+  function persistLog() { saveJSON("workout-log:" + date, log); }
+  function persistStreak() { saveJSON("workout-streak", streak); }
+  function persistActiveDay() { saveJSON("workout-active-day", activeDay); }
+
+  function findDay(id) {
+    for (var i = 0; i < plan.length; i++) if (plan[i].id === id) return plan[i];
+    return null;
+  }
+
+  function dayTotals(dayId) {
+    var dayPlan = findDay(dayId);
+    if (!dayPlan) return { total: 0, done: 0 };
+    var total = 0, done = 0;
+    dayPlan.exercises.forEach(function (ex) {
+      total += ex.sets;
+      var entry = log[dayId] && log[dayId][ex.id];
+      done += Math.min((entry && entry.completed) || 0, ex.sets);
+    });
+    if (dayPlan.cardio) {
+      total += 1;
+      if (log[dayId] && log[dayId]._cardioDone) done += 1;
+    }
+    return { total: total, done: done };
+  }
+
+  function showToast(msg) {
+    toastText = msg;
+    render();
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastText = ""; render(); }, 2600);
+  }
+
+  // ---------- actions ----------
+  function setActiveDay(id) { activeDay = id; persistActiveDay(); render(); }
+
+  function bumpSetTo(dayId, exId, targetSets, nextCompleted) {
+    if (!log[dayId]) log[dayId] = { _cardioDone: false, _finished: false };
+    if (!log[dayId][exId]) log[dayId][exId] = { completed: 0, weight: "" };
+    log[dayId][exId].completed = Math.max(0, Math.min(targetSets, nextCompleted));
+    persistLog();
+    render();
+  }
+
+  function setWeight(dayId, exId, value) {
+    if (!log[dayId]) log[dayId] = { _cardioDone: false, _finished: false };
+    if (!log[dayId][exId]) log[dayId][exId] = { completed: 0, weight: "" };
+    log[dayId][exId].weight = value;
+    persistLog();
+  }
+
+  function toggleCardio(dayId) {
+    if (!log[dayId]) log[dayId] = { _cardioDone: false, _finished: false };
+    log[dayId]._cardioDone = !log[dayId]._cardioDone;
+    persistLog();
+    render();
+  }
+
+  function finishWorkout() {
+    var dayPlan = findDay(activeDay);
+    var dayLog = log[activeDay] || {};
+    if (dayLog._finished) {
+      showToast(dayPlan.name.split(" (")[0] + " already logged today");
+      return;
+    }
+    dayLog._finished = true;
+    log[activeDay] = dayLog;
+    persistLog();
+    streak += 1;
+    persistStreak();
+    showToast(dayPlan.name.split(" (")[0] + " logged. Streak: " + streak);
+    render();
+  }
+
+  function updateExerciseField(dayId, exId, field, value) {
+    var dayPlan = findDay(dayId);
+    dayPlan.exercises = dayPlan.exercises.map(function (ex) {
+      if (ex.id !== exId) return ex;
+      var copy = Object.assign({}, ex);
+      copy[field] = value;
+      return copy;
+    });
+    persistPlan();
+    render();
+  }
+
+  function addExercise(dayId) {
+    var dayPlan = findDay(dayId);
+    dayPlan.exercises.push({ id: uid(), name: "New Exercise", sets: 3, reps: "10-12" });
+    if (!log[dayId]) log[dayId] = { _cardioDone: false, _finished: false };
+    log[dayId][dayPlan.exercises[dayPlan.exercises.length - 1].id] = { completed: 0, weight: "" };
+    persistPlan(); persistLog();
+    render();
+  }
+
+  function removeExercise(dayId, exId) {
+    var dayPlan = findDay(dayId);
+    dayPlan.exercises = dayPlan.exercises.filter(function (ex) { return ex.id !== exId; });
+    persistPlan();
+    render();
+  }
+
+  function renameDay(dayId, value) {
+    var dayPlan = findDay(dayId);
+    dayPlan.name = value;
+    persistPlan();
+    render();
+  }
+
+  function toggleEditing() { editing = !editing; render(); }
+
+  function resetToday() {
+    if (!confirm("Clear today's logged sets and cardio for this day? This won't touch your streak or plan.")) return;
+    log[activeDay] = { _cardioDone: false, _finished: false };
+    findDay(activeDay).exercises.forEach(function (ex) { log[activeDay][ex.id] = { completed: 0, weight: "" }; });
+    persistLog();
+    render();
+  }
+
+  // ---------- render ----------
+  function esc(s) {
+    var d = document.createElement("div");
+    d.innerText = s;
+    return d.innerHTML;
+  }
+
+  function renderPlateStack(pct) {
+    var totalPlates = 6;
+    var filled = Math.round((pct / 100) * totalPlates);
+    var plates = "";
+    for (var i = 0; i < totalPlates; i++) {
+      var h = 22 + (i % 3) * 6;
+      var active = i < filled;
+      plates += '<div class="plate' + (active ? " active" : "") + '" style="height:' + h + 'px"></div>';
+    }
+    return (
+      '<div class="plate-row">' +
+        '<div class="plate-cap"></div><div class="plate-sleeve"></div>' +
+        '<div class="plates">' + plates + '</div>' +
+        '<div class="plate-sleeve"></div><div class="plate-cap"></div>' +
+      '</div>'
+    );
+  }
+
+  function render() {
+    var app = document.getElementById("app");
+    var dayPlan = findDay(activeDay);
+    var dayLog = log[activeDay] || {};
+    var totals = dayTotals(activeDay);
+    var pct = totals.total ? Math.round((totals.done / totals.total) * 100) : 0;
+
+    var tabsHtml = plan.map(function (d) {
+      var t = dayTotals(d.id);
+      var donePct = t.total ? t.done / t.total : 0;
+      var isActive = d.id === activeDay;
+      return (
+        '<button class="tab' + (isActive ? " active" : "") + '" data-day="' + d.id + '">' +
+          '<span style="position:relative;z-index:1">' + esc(d.label) +
+          '<span class="sub">' + esc(d.name.split(" (")[0]) + '</span></span>' +
+          (!isActive && donePct > 0 ? '<span class="tab-bar" style="width:' + (donePct * 100) + '%"></span>' : "") +
+        '</button>'
+      );
+    }).join("");
+
+    var exercisesHtml = dayPlan.exercises.map(function (ex) {
+      var exLog = dayLog[ex.id] || { completed: 0, weight: "" };
+      var complete = exLog.completed >= ex.sets;
+      var metaHtml = editing
+        ? (
+            '<span>sets <input class="edit-field" type="number" min="1" value="' + ex.sets + '" data-action="set-field" data-ex="' + ex.id + '" data-field="sets"></span>' +
+            '<span>reps <input class="edit-field reps" type="text" value="' + esc(ex.reps) + '" data-action="set-field" data-ex="' + ex.id + '" data-field="reps"></span>' +
+            '<button class="remove-link" data-action="remove-ex" data-ex="' + ex.id + '">remove</button>'
+          )
+        : ('<span>' + ex.sets + ' &times; ' + esc(String(ex.reps)) + '</span>');
+
+      var nameHtml = editing
+        ? '<input class="edit-name-input" value="' + esc(ex.name) + '" data-action="rename-ex" data-ex="' + ex.id + '">'
+        : '<div class="ex-name">' + esc(ex.name) + '</div>';
+
+      var setsHtml = "";
+      for (var i = 0; i < ex.sets; i++) {
+        var filled = i < exLog.completed;
+        setsHtml += '<button class="set-btn' + (filled ? " filled" : "") + '" data-action="set-toggle" data-ex="' + ex.id + '" data-index="' + i + '" data-filled="' + filled + '">' + (i + 1) + '</button>';
+      }
+
+      return (
+        '<div class="card' + (complete ? " complete" : "") + '">' +
+          '<div class="card-top">' +
+            '<div style="flex:1;min-width:0">' + nameHtml + '<div class="ex-meta">' + metaHtml + '</div></div>' +
+            '<input class="weight-input" placeholder="lb/kg" value="' + esc(exLog.weight) + '" data-action="set-weight" data-ex="' + ex.id + '">' +
+          '</div>' +
+          '<div class="set-row">' + setsHtml + '</div>' +
+        '</div>'
+      );
+    }).join("");
+
+    var cardioHtml = dayPlan.cardio
+      ? (
+          '<div class="cardio-card' + (dayLog._cardioDone ? " done" : "") + '">' +
+            '<div><div class="cardio-label">Cardio</div>' +
+              '<div class="ex-name">' + esc(dayPlan.cardio.name) + '</div>' +
+              '<div style="font-size:12px;color:var(--text-dim);margin-top:2px">' + esc(dayPlan.cardio.duration) + '</div>' +
+            '</div>' +
+            '<button class="cardio-check' + (dayLog._cardioDone ? " done" : "") + '" data-action="cardio-toggle">' + (dayLog._cardioDone ? "\u2713" : "") + '</button>' +
+          '</div>'
+        )
+      : "";
+
+    app.innerHTML =
+      '<div class="eyebrow">Hit Each Muscle 2x a Week &middot; Streak ' + streak + '</div>' +
+      '<h1>' + esc(dayPlan.name) + '</h1>' +
+      renderPlateStack(pct) +
+      '<div class="progress-label">' + totals.done + '/' + totals.total + ' sets &middot; ' + pct + '%</div>' +
+      '<div class="tabs">' + tabsHtml + '</div>' +
+      '<div class="toolbar">' +
+        '<input class="day-name-input" value="' + esc(dayPlan.name) + '"' + (editing ? "" : " disabled") + ' data-action="rename-day">' +
+        '<button class="btn-ghost" data-action="toggle-edit">' + (editing ? "Done editing" : "Edit plan") + '</button>' +
+      '</div>' +
+      '<div class="exercise-list">' + exercisesHtml + cardioHtml +
+        (editing ? '<button class="add-exercise-btn" data-action="add-ex">+ Add exercise</button>' : "") +
+      '</div>' +
+      '<button class="finish-btn' + (pct === 100 ? " complete" : "") + '" data-action="finish"' + (pct === 0 ? " disabled" : "") + '>' +
+        (dayLog._finished ? "Logged for today" : (pct === 100 ? "Log complete workout" : "Log workout so far")) +
+      '</button>' +
+      '<div class="toast">' + esc(toastText) + '</div>' +
+      '<button class="reset-link" data-action="reset-today">Clear today\u2019s progress for this day</button>';
+
+    bindEvents();
+  }
+
+  function bindEvents() {
+    var app = document.getElementById("app");
+
+    app.querySelectorAll('[data-day]').forEach(function (el) {
+      el.addEventListener("click", function () { setActiveDay(el.getAttribute("data-day")); });
+    });
+
+    var editEl = app.querySelector('[data-action="toggle-edit"]');
+    if (editEl) editEl.addEventListener("click", toggleEditing);
+
+    var addEl = app.querySelector('[data-action="add-ex"]');
+    if (addEl) addEl.addEventListener("click", function () { addExercise(activeDay); });
+
+    var finishEl = app.querySelector('[data-action="finish"]');
+    if (finishEl) finishEl.addEventListener("click", finishWorkout);
+
+    var cardioEl = app.querySelector('[data-action="cardio-toggle"]');
+    if (cardioEl) cardioEl.addEventListener("click", function () { toggleCardio(activeDay); });
+
+    var resetEl = app.querySelector('[data-action="reset-today"]');
+    if (resetEl) resetEl.addEventListener("click", resetToday);
+
+    var dayNameEl = app.querySelector('[data-action="rename-day"]');
+    if (dayNameEl) dayNameEl.addEventListener("input", function (e) { renameDay(activeDay, e.target.value); });
+
+    app.querySelectorAll('[data-action="rename-ex"]').forEach(function (el) {
+      el.addEventListener("input", function (e) { updateExerciseField(activeDay, el.getAttribute("data-ex"), "name", e.target.value); });
+    });
+
+    app.querySelectorAll('[data-action="set-field"]').forEach(function (el) {
+      el.addEventListener("change", function (e) {
+        var field = el.getAttribute("data-field");
+        var val = field === "sets" ? (parseInt(e.target.value, 10) || 1) : e.target.value;
+        updateExerciseField(activeDay, el.getAttribute("data-ex"), field, val);
+      });
+    });
+
+    app.querySelectorAll('[data-action="remove-ex"]').forEach(function (el) {
+      el.addEventListener("click", function () { removeExercise(activeDay, el.getAttribute("data-ex")); });
+    });
+
+    app.querySelectorAll('[data-action="set-weight"]').forEach(function (el) {
+      el.addEventListener("input", function (e) { setWeight(activeDay, el.getAttribute("data-ex"), e.target.value); });
+    });
+
+    app.querySelectorAll('[data-action="set-toggle"]').forEach(function (el) {
+      el.addEventListener("click", function () {
+        var exId = el.getAttribute("data-ex");
+        var idx = parseInt(el.getAttribute("data-index"), 10);
+        var filled = el.getAttribute("data-filled") === "true";
+        var dayPlan = findDay(activeDay);
+        var ex = dayPlan.exercises.filter(function (e) { return e.id === exId; })[0];
+        var nextCompleted = filled ? idx : idx + 1;
+        bumpSetTo(activeDay, exId, ex.sets, nextCompleted);
+      });
+    });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
