@@ -468,7 +468,8 @@
   var streak = loadJSON("workout-streak", 0);
   var activeDay = loadJSON("workout-active-day", "day1");
   var editing = false;
-  var view = "tracker"; // "tracker" | "history"
+  var view = "tracker"; // "tracker" | "history" | "history-detail"
+  var historySelection = null; // { date, dayId }
   var toastText = "";
   var toastTimer = null;
 
@@ -529,6 +530,7 @@
         if (setsDone > 0 || dl._finished) {
           entries.push({
             date: dateStr,
+            dayId: day.id,
             dayName: day.name.split(" (")[0],
             done: setsDone,
             total: setsTotal,
@@ -552,6 +554,8 @@
   function setActiveDay(id) { activeDay = id; persistActiveDay(); render(); }
   function openHistory() { view = "history"; render(); }
   function closeHistory() { view = "tracker"; render(); }
+  function openHistoryDetail(date, dayId) { historySelection = { date: date, dayId: dayId }; view = "history-detail"; render(); }
+  function backToHistoryList() { view = "history"; render(); }
 
   function bumpSetTo(dayId, exId, targetSets, nextCompleted) {
     if (!log[dayId]) log[dayId] = { _cardioDone: false, _finished: false };
@@ -669,14 +673,17 @@
       ? entries.map(function (e) {
           var pct = e.total ? Math.round((e.done / e.total) * 100) : 0;
           return (
-            '<div class="card' + (pct === 100 ? " complete" : "") + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+            '<div class="card' + (pct === 100 ? " complete" : "") + '" style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer;" data-action="open-detail" data-date="' + esc(e.date) + '" data-day="' + esc(e.dayId) + '">' +
               '<div>' +
                 '<div class="ex-name">' + esc(e.dayName) + '</div>' +
                 '<div style="font-size:12px;color:var(--text-dim);margin-top:2px">' + esc(formatDate(e.date)) + '</div>' +
               '</div>' +
-              '<div style="text-align:right">' +
-                '<div style="font-family:\'JetBrains Mono\', monospace;font-size:13px;color:' + (pct === 100 ? "var(--success)" : "var(--text-dim)") + '">' + e.done + '/' + e.total + '</div>' +
-                '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">' + pct + '%' + (e.finished ? " \u2713" : "") + '</div>' +
+              '<div style="text-align:right;display:flex;align-items:center;gap:10px">' +
+                '<div>' +
+                  '<div style="font-family:\'JetBrains Mono\', monospace;font-size:13px;color:' + (pct === 100 ? "var(--success)" : "var(--text-dim)") + '">' + e.done + '/' + e.total + '</div>' +
+                  '<div style="font-size:11px;color:var(--text-dim);margin-top:2px">' + pct + '%' + (e.finished ? " \u2713" : "") + '</div>' +
+                '</div>' +
+                '<div style="color:var(--text-dim);font-size:16px">\u203A</div>' +
               '</div>' +
             '</div>'
           );
@@ -686,14 +693,83 @@
     app.innerHTML =
       '<div class="eyebrow">Streak ' + streak + '</div>' +
       '<h1>History</h1>' +
+      '<div style="font-size:12px;color:var(--text-dim);margin-top:6px">Tap a day to see full details</div>' +
       '<div class="exercise-list" style="margin-top:18px">' + listHtml + '</div>' +
       '<button class="btn-ghost" style="margin-top:20px;width:100%;padding:12px;" data-action="close-history">Back to today\u2019s workout</button>';
 
     app.querySelector('[data-action="close-history"]').addEventListener("click", closeHistory);
+    app.querySelectorAll('[data-action="open-detail"]').forEach(function (el) {
+      el.addEventListener("click", function () {
+        openHistoryDetail(el.getAttribute("data-date"), el.getAttribute("data-day"));
+      });
+    });
+  }
+
+  function renderHistoryDetail() {
+    var app = document.getElementById("app");
+    var sel = historySelection;
+    var dayPlan = findDay(sel.dayId);
+    var dayLogByDay = loadJSON("workout-log:" + sel.date, null);
+    var dl = (dayLogByDay && dayLogByDay[sel.dayId]) || {};
+
+    var exRows = dayPlan.exercises.map(function (ex) {
+      var entry = dl[ex.id] || { completed: 0, weight: "" };
+      var complete = entry.completed >= ex.sets;
+      return (
+        '<div class="card' + (complete ? " complete" : "") + '">' +
+          '<div class="card-top">' +
+            '<div>' +
+              '<div class="ex-name">' + esc(ex.name) + '</div>' +
+              '<div class="ex-meta"><span>' + ex.sets + ' &times; ' + esc(String(ex.reps)) + ' target</span></div>' +
+            '</div>' +
+            (entry.weight ? '<div class="weight-input" style="pointer-events:none">' + esc(entry.weight) + '</div>' : '') +
+          '</div>' +
+          '<div style="font-family:\'JetBrains Mono\', monospace;font-size:12px;color:' + (complete ? "var(--success)" : "var(--text-dim)") + ';margin-top:10px">' +
+            'Logged ' + entry.completed + ' of ' + ex.sets + ' sets' +
+          '</div>' +
+        '</div>'
+      );
+    }).join("");
+
+    var cardioHtml = "";
+    if (dayPlan.cardio) {
+      var cardioDone = !!dl._cardioDone;
+      cardioHtml =
+        '<div class="cardio-card' + (cardioDone ? " done" : "") + '">' +
+          '<div><div class="cardio-label">Cardio</div>' +
+            '<div class="ex-name">' + esc(dayPlan.cardio.name) + '</div>' +
+            '<div style="font-size:12px;color:var(--text-dim);margin-top:2px">' + esc(dayPlan.cardio.duration) + '</div>' +
+          '</div>' +
+          '<div class="cardio-check' + (cardioDone ? " done" : "") + '" style="pointer-events:none">' + (cardioDone ? "\u2713" : "") + '</div>' +
+        '</div>';
+    }
+
+    var totals = (function () {
+      var total = 0, done = 0;
+      dayPlan.exercises.forEach(function (ex) {
+        total += ex.sets;
+        var entry = dl[ex.id];
+        done += Math.min((entry && entry.completed) || 0, ex.sets);
+      });
+      if (dayPlan.cardio) { total += 1; if (dl._cardioDone) done += 1; }
+      return { total: total, done: done };
+    })();
+    var pct = totals.total ? Math.round((totals.done / totals.total) * 100) : 0;
+
+    app.innerHTML =
+      '<div class="eyebrow">' + esc(formatDate(sel.date)) + (dl._finished ? " \u00b7 Logged complete" : "") + '</div>' +
+      '<h1>' + esc(dayPlan.name) + '</h1>' +
+      renderPlateStack(pct) +
+      '<div class="progress-label">' + totals.done + '/' + totals.total + ' sets &middot; ' + pct + '%</div>' +
+      '<div class="exercise-list" style="margin-top:18px">' + exRows + cardioHtml + '</div>' +
+      '<button class="btn-ghost" style="margin-top:20px;width:100%;padding:12px;" data-action="back-to-list">\u2039 Back to history</button>';
+
+    app.querySelector('[data-action="back-to-list"]').addEventListener("click", backToHistoryList);
   }
 
   function render() {
     if (view === "history") { renderHistory(); return; }
+    if (view === "history-detail") { renderHistoryDetail(); return; }
     var app = document.getElementById("app");
     var dayPlan = findDay(activeDay);
     var dayLog = log[activeDay] || {};
